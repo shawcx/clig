@@ -1,0 +1,106 @@
+#!/usr/bin/env python3
+
+import sys
+import os
+import shlex
+import shutil
+import subprocess
+import re
+import logging
+
+logging.basicConfig(
+    format  = '%(asctime)s %(levelname)-8s %(message)s',
+    datefmt = '%Y-%m-%d %H:%M:%S',
+    filename = 'clig.log',
+    level    = logging.DEBUG
+    )
+
+if 'SSH_CONNECTION' not in os.environ:
+    print('[!] Only SSH')
+    sys.exit(0)
+
+os.chdir('repositories')
+
+class CligShell:
+    def __init__(self):
+        command = os.environ.get('SSH_ORIGINAL_COMMAND')
+        if not command:
+            print('No interactive shell access.')
+            sys.exit(-1)
+
+        command = shlex.split(command)
+        del os.environ['SSH_ORIGINAL_COMMAND']
+
+        key_num = sys.argv[1]
+
+        logging.info('%s: %s', key_num, command)
+
+        fn = CligShell._commands.get(command[0])
+        if not fn:
+            print('[!] Unknown command:', command[0])
+            sys.exit(-1)
+
+        fn(self, *command)
+
+    def _list(self, command, *repo):
+        base = os.path.abspath('.')
+        for root,directories,filenames in os.walk(base):
+            for directory in directories:
+                if directory.endswith('.git'):
+                    name = os.path.join(root, directory)
+                    name = name[len(base)+1:]
+                    sys.stdout.write(name + '\n')
+
+    def _create(self, command, *repo):
+        if not repo:
+            print('[!] Missing repository name')
+            return
+
+        repo = '/'.join(repo)
+        if not repo.endswith('.git'):
+            repo += '.git'
+
+        #TODO: sanitize repo names
+        self._subprocess('git','init','--bare', repo)
+
+    def _install(self, command):
+        print('echo this could install clig')
+
+    def _backup(self, *a):
+        paths = []
+        base = os.path.abspath('.')
+        for root,directories,filenames in os.walk(base):
+            for directory in directories:
+                if directory.endswith('.git'):
+                    name = os.path.join(root, directory)
+                    name = name[len(base)+1:]
+                    paths.append(name)
+
+        p = subprocess.Popen(
+            ['tar', 'zcpf', '-'] + paths,
+            stdin  = sys.stdin.buffer,
+            stdout = sys.stdout.buffer,
+            )
+        p.wait()
+
+    def _subprocess(self, *command):
+        p = subprocess.Popen(
+            command,
+            stdin  = sys.stdin.buffer,
+            stdout = sys.stdout.buffer,
+            )
+        p.wait()
+
+    _commands = {
+        'list'    : _list,
+        'create'  : _create,
+        'install' : _install,
+        'backup'  : _backup,
+        'git-upload-archive' : _subprocess,
+        'git-upload-pack'    : _subprocess,
+        'git-receive-pack'   : _subprocess,
+        }
+
+
+if '__main__' == __name__:
+    CligShell()

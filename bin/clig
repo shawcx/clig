@@ -66,6 +66,8 @@ class All(Clig):
         base = os.path.abspath('.')
         fmt = '-' * (shutil.get_terminal_size().columns)
         for root,directories,filenames in os.walk(base):
+            directories.sort()
+            filenames.sort()
             if '.git' not in directories and '.git' not in filenames:
                 continue
             name = root[len(base)+1:]

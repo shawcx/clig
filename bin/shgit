@@ -1,0 +1,13 @@
+#!/bin/bash
+
+GITCMD="$@"
+
+if [ -z $GITCMD ]; then
+	GITCMD="status -s"
+fi
+
+for DIR in `find . -type d -name .git 2> /dev/null`; do
+	DIR=`dirname $DIR`
+	(echo $DIR; cd $DIR; git $GITCMD)
+done
+

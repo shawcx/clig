@@ -182,9 +182,7 @@ def main():
                 clig = os.path.abspath(__file__)
                 dirname = os.path.dirname(clig)
 
-                #print(__file__, gitcmds)
                 for gitcmd in gitcmds:
-                    #print('Adding', )
                     fullpath = os.path.join(dirname, gitcmd)
                     try:
                         os.symlink('clig', fullpath)

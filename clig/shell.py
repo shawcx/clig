@@ -1,31 +1,35 @@
 #!/usr/bin/env python3
 
-import sys
+import logging
 import os
+import re
 import shlex
 import shutil
 import subprocess
-import re
-import logging
+import sys
 
-logging.basicConfig(
-    format  = '%(asctime)s %(levelname)-8s %(message)s',
-    datefmt = '%Y-%m-%d %H:%M:%S',
-    filename = 'clig.log',
-    level    = logging.DEBUG
-    )
+def main():
+    if 'SSH_CONNECTION' not in os.environ:
+        print('[!] Only SSH', file=sys.stderr)
+        sys.exit(-1)
 
-if 'SSH_CONNECTION' not in os.environ:
-    print('[!] Only SSH')
-    sys.exit(0)
+    logging.basicConfig(
+        format  = '%(asctime)s %(levelname)-8s %(message)s',
+        datefmt = '%Y-%m-%d %H:%M:%S',
+        filename = 'clig.log',
+        level    = logging.DEBUG
+        )
 
-os.chdir('repositories')
+    os.chdir('repositories')
+
+    CligShell()
+
 
 class CligShell:
     def __init__(self):
         command = os.environ.get('SSH_ORIGINAL_COMMAND')
         if not command:
-            print('No interactive shell access.')
+            print('No interactive shell access.', file=sys.stderr)
             sys.exit(-1)
 
         command = shlex.split(command)
@@ -37,7 +41,7 @@ class CligShell:
 
         fn = CligShell._commands.get(command[0])
         if not fn:
-            print('[!] Unknown command:', command[0])
+            print(f'[!] Error: Unknown command: {command[0]}', file=sys.stderr)
             sys.exit(-1)
 
         fn(self, *command)
@@ -49,11 +53,11 @@ class CligShell:
                 if directory.endswith('.git'):
                     name = os.path.join(root, directory)
                     name = name[len(base)+1:]
-                    sys.stdout.write(name + '\n')
+                    print(name)
 
     def _create(self, command, *repo):
         if not repo:
-            print('[!] Missing repository name')
+            print('[!] Error: Missing repository name')
             return
 
         repo = '/'.join(repo)
@@ -96,7 +100,3 @@ class CligShell:
         'git-upload-pack'    : _subprocess,
         'git-receive-pack'   : _subprocess,
         }
-
-
-if '__main__' == __name__:
-    CligShell()

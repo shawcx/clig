@@ -18,7 +18,8 @@ setup(
     zip_safe             = False,
     entry_points = {
         'console_scripts' : [
-            'clig = clig:main',
+            'clig = clig.clig:main',
+            'clig-shell = clig.shell:main',
             ]
         },
     classifiers=[

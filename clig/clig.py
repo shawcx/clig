@@ -30,7 +30,7 @@ class Clig:
         self.args,self.tailargs = self.parser.parse_known_args()
 
     def arguments(self):
-        return
+        pass
 
     def run(self):
         raise NotImplementedError
@@ -170,30 +170,40 @@ def main():
         'git-tree'   : Tree,
     }
 
+    def install():
+        if cmd != 'clig':
+            return
+        if len(sys.argv) != 2:
+            return
+        if sys.argv[1] != 'install':
+            return
+
+        gitcmds = [k for k in cmds.keys() if k.startswith('git-')]
+        gitcmds.sort()
+
+        dirname = os.path.dirname(sys.argv[0])
+
+        for gitcmd in gitcmds:
+            fullpath = os.path.join(dirname, gitcmd)
+            try:
+                os.symlink('clig', fullpath)
+                print(f'[+] Adding: {fullpath}')
+            except FileExistsError:
+                print(f'[+] Skipping: {fullpath}')
+            except Exception as e:
+                print(f'[!] Error: {fullpath}: {e}')
+
+        sys.exit(0)
+
     cmd = os.path.basename(sys.argv[0])
-    # support installing
-    if cmd == 'clig':
-        if len(sys.argv) == 2:
-            if sys.argv[1] == 'install':
-                gitcmds = [k for k in cmds.keys() if k.startswith('git-')]
-                gitcmds.sort()
 
-                dirname = os.path.dirname(sys.argv[0])
-
-                for gitcmd in gitcmds:
-                    fullpath = os.path.join(dirname, gitcmd)
-                    try:
-                        os.symlink('clig', fullpath)
-                        print(f'[+] Adding: {fullpath}')
-                    except FileExistsError:
-                        print(f'[+] Skipping: {fullpath}')
-                    except Exception as e:
-                        print(f'[!] Error: {fullpath}: {e}')
-                return 0
+    # check if installer invoked
+    install()
 
     cls = cmds.get(cmd)
     if cls is None:
-        sys.stderr.write('Unknown command: %s\n' % cmd)
+        print(f'[!] Error: Unknown command: {cmd}', file=sys.stderr)
         return -1
 
-    return cls().run()
+    cls().run()
+    return 0

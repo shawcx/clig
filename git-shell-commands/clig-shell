@@ -76,12 +76,8 @@ class CligShell:
                     name = name[len(base)+1:]
                     paths.append(name)
 
-        p = subprocess.Popen(
-            ['tar', 'zcpf', '-'] + paths,
-            stdin  = sys.stdin.buffer,
-            stdout = sys.stdout.buffer,
-            )
-        p.wait()
+        args = ['tar', 'zcpf', '-'] + paths
+        self._subprocess(*args)
 
     def _subprocess(self, *command):
         p = subprocess.Popen(
@@ -92,10 +88,10 @@ class CligShell:
         p.wait()
 
     _commands = {
-        'list'    : _list,
-        'create'  : _create,
-        'install' : _install,
-        'backup'  : _backup,
+        'list'               : _list,
+        'create'             : _create,
+        'install'            : _install,
+        'backup'             : _backup,
         'git-upload-archive' : _subprocess,
         'git-upload-pack'    : _subprocess,
         'git-receive-pack'   : _subprocess,

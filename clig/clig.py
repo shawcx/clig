@@ -9,7 +9,6 @@ import subprocess
 import time
 import textwrap
 
-__version__ = '0.5'
 DEFAULT_USER = 'clig'
 
 
@@ -179,18 +178,17 @@ def main():
                 gitcmds = [k for k in cmds.keys() if k.startswith('git-')]
                 gitcmds.sort()
 
-                clig = os.path.abspath(__file__)
-                dirname = os.path.dirname(clig)
+                dirname = os.path.dirname(sys.argv[0])
 
                 for gitcmd in gitcmds:
                     fullpath = os.path.join(dirname, gitcmd)
                     try:
                         os.symlink('clig', fullpath)
-                        print('Adding', fullpath)
+                        print(f'[+] Adding: {fullpath}')
                     except FileExistsError:
-                        print('Skipping', fullpath)
+                        print(f'[+] Skipping: {fullpath}')
                     except Exception as e:
-                        print('Error:', fullpath, e)
+                        print(f'[!] Error: {fullpath}: {e}')
                 return 0
 
     cls = cmds.get(cmd)
@@ -199,6 +197,3 @@ def main():
         return -1
 
     return cls().run()
-
-if '__main__' == __name__:
-    sys.exit(main())

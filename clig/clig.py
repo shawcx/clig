@@ -35,7 +35,7 @@ class Clig:
     def run(self):
         raise NotImplementedError
 
-    def _call(self, command_line, *args, **kwds):
+    def __call__(self, command_line, *args, **kwds):
         if 'stdout' not in kwds:
             kwds['stdout'] = subprocess.PIPE
         if 'stderr' not in kwds:
@@ -77,7 +77,7 @@ class All(Clig):
                 sys.stdout.write(name)
                 sys.stdout.write(' \x1b[0m\n')
             os.chdir(root)
-            self._call('git %s', ' '.join(git_cmd), stdout=None, stderr=None)
+            self('git %s', ' '.join(git_cmd), stdout=None, stderr=None)
 
 class Create(Clig):
     '''
@@ -89,11 +89,7 @@ class Create(Clig):
         self.parser.add_argument('repository', help='Repository name')
 
     def run(self):
-        out = self._call('ssh %s@%s create %s',
-            self.args.user,
-            self.args.host,
-            self.args.repository,
-            )
+        out = self(f'ssh {self.args.user}@{self.args.host} create {self.args.repository}')
         sys.stdout.buffer.write(out)
 
 
@@ -106,10 +102,7 @@ class List(Clig):
         self.parser.add_argument('host', help='Remote host')
 
     def run(self):
-        out = self._call('ssh %s@%s list',
-            self.args.user,
-            self.args.host,
-            )
+        out = self(f'ssh {self.args.user}@{self.args.host} list')
         sys.stdout.buffer.write(out)
 
 

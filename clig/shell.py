@@ -65,7 +65,7 @@ class CligShell:
             repo += '.git'
 
         #TODO: sanitize repo names
-        self._subprocess('git','init','--bare', repo)
+        self('git','init','--bare', repo)
 
     def _install(self, command):
         print('echo this could install clig')
@@ -81,9 +81,9 @@ class CligShell:
                     paths.append(name)
 
         args = ['tar', 'zcpf', '-'] + paths
-        self._subprocess(*args)
+        self(*args)
 
-    def _subprocess(self, *command):
+    def __call__(self, *command):
         p = subprocess.Popen(
             command,
             stdin  = sys.stdin.buffer,
@@ -96,7 +96,7 @@ class CligShell:
         'create'             : _create,
         'install'            : _install,
         'backup'             : _backup,
-        'git-upload-archive' : _subprocess,
-        'git-upload-pack'    : _subprocess,
-        'git-receive-pack'   : _subprocess,
+        'git-upload-archive' : __call__,
+        'git-upload-pack'    : __call__,
+        'git-receive-pack'   : __call__,
         }

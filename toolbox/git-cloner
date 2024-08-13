@@ -1,0 +1,249 @@
+#!/usr/bin/env python3
+
+import sys
+import os
+import json
+import urllib.parse
+import urllib.request
+
+import argparse
+import collections
+import configparser
+import inspect
+import logging
+import os
+import sys
+import time
+
+
+def main():
+    argparser = argparse.ArgumentParser(add_help=False)
+
+    argparser.add_argument('domain',
+        metavar='<domain>', nargs='?',
+        help='Specify alias or domain')
+
+    argparser.add_argument('--prefix', '-p',
+        metavar='<path>',
+        help='Limit repositories to a specific path')
+
+    argparser.add_argument('--exclude', '-x',
+        metavar='<keyword>',
+        help='Filter repositories by keyword')
+
+    argparser.add_argument('--list', '-l',
+        action='store_true',
+        help='List projects')
+
+    argparser.add_argument('--verbose', '-v',
+        action='store_true',
+        help='Verbose output')
+
+    args = argparser.parse_args()
+
+    logging.basicConfig(
+        format  = '%(message)s',
+        datefmt = '%Y-%m-%d %H:%M:%S',
+        level   = logging.DEBUG if args.verbose else logging.INFO,
+        force   = True
+        )
+
+    ini_files = [
+        os.path.expanduser('~/.git-cloner'),
+        ]
+
+    try:
+        config = configparser.ConfigParser(interpolation=None)
+        config.optionxform = str
+        ok = config.read(ini_files)
+    except configparser.ParsingError as e:
+        logging.error(f'[!] Unable to parse file: {e}')
+        return -1
+    if not ok:
+        logging.error(f'[!] Unable to read config file: {" ".join(ini_files)}')
+        return -1
+
+    reverse = {}
+    max_alias_len = 0
+    for alias,domain in config['aliases'].items():
+        max_alias_len = max(len(alias), max_alias_len)
+        reverse[domain] = alias
+
+    # initialize the alias and domain variables
+    alias = None
+    domain = args.domain
+
+    # check if cloned before
+    #if os.path.exists('.git-cloner'):
+    #    with open('.git-cloner', 'r') as fp:
+    #        specified = domain
+    #        alias,domain = [s.strip() for s in fp.readline().split('=')]
+    #        if specified and (specified != alias and specified != domain):
+    #            logging.error('[!] Conflict between %s and %s (%s)', specified, alias, domain)
+    #            return -1
+
+    isGitHub = False
+    if domain.startswith('github'):
+        isGitHub = True
+        domain,user = domain.split(':',1)
+
+    # if no domain specified check if there is only 1 entry in the config file
+    if not domain:
+        if 1 < len(config['tokens']):
+            logging.error('[!] More than one domain defined, please specify:')
+            for name in config['tokens']:
+                if name in reverse:
+                    print(f'{reverse[name]:{max_alias_len}} ({name})')
+                else:
+                    print(f'{name}')
+            return(-1)
+        else:
+            domain = list(config['tokens'])[0]
+    else:
+        if domain in config['aliases']:
+            domain = config['aliases'][domain]
+
+    # track the alias or generate it from the current directory
+    alias = reverse.get(domain)
+    if not alias:
+        alias = os.path.basename(os.getcwd())
+
+    # aggregate aliases and domains
+    domains = set()
+    try:
+        domains.update(list(config['tokens']))
+    except KeyError:
+        pass
+    try:
+        domains.update(list(config['aliases']))
+    except KeyError:
+        pass
+
+    # check if the specified domain has a token
+    if not isGitHub and domain not in domains:
+        logging.error(f'[!] No token specified for "{domain}"')
+        logging.error(f'https://{domain}/-/profile/personal_access_tokens')
+        return -1
+
+    # cache the alias and domain for future runs
+    if not os.path.exists('.git-cloner'):
+        with open('.git-cloner', 'w') as fp:
+            fp.write(f'{alias} = {domain}')
+
+    if not isGitHub:
+        token = config['tokens'][domain]
+        print('????', args, domain, token)
+        #query_gitlab(args, domain, token)
+    else:
+        token = config['github'][user]
+        print('GH!', user, token)
+        query_github(user, token)
+    return 0
+
+
+def query_gitlab(args, domain, token):
+    baseurl = f'https://{domain}/api/v4/'
+
+    params = {
+        'page' :'1',
+        'per_page' : 100,
+    }
+
+    if args.prefix:
+        params['search_namespaces'] = 'true'
+        params['search'] = args.prefix
+
+    projects = []
+    while True:
+        #url = baseurl + f'projects?page={page}&membership=true'
+        url = baseurl + f'projects?{ urllib.parse.urlencode(params) }'
+        print(url)
+
+        request = urllib.request.Request(url)
+        request.add_header('Private-Token', token)
+
+        try:
+            response = urllib.request.urlopen(request)
+        except Exception as e:
+            logging.error(f'[!] Could not connect: {e}')
+            sys.exit(-1)
+
+        if response.getcode() != 200:
+            logging.error(f'[!] Returned: {response.getcode()}')
+            sys.exit(-1)
+
+        batch = json.loads(response.read(response.length))
+        projects.extend(batch)
+
+        page = response.headers.get('X-Next-Page')
+        total = response.headers.get('X-Total-Pages', '')
+        if not page:
+            break
+
+        logging.info('Fetched page %s of %s', params['page'], total)
+        params['page'] = page
+
+    if args.prefix:
+        projects = [p for p in projects if p['path_with_namespace'].startswith(args.prefix)]
+    if args.exclude:
+        projects = [p for p in projects if not args.exclude in p['path_with_namespace']]
+    projects.sort(key=lambda p: p['path_with_namespace'])
+
+    if args.list:
+        for project in projects:
+            logging.info('- %s', project['path_with_namespace'])
+    else:
+        clone(projects, 'path_with_namespace', 'ssh_url_to_repo')
+
+
+def query_github(user, token):
+    baseurl = f'https://api.github.com'
+    projects = []
+
+    url = baseurl + f'/users/{user}/repos'
+    request = urllib.request.Request(url)
+    request.add_header('Accept',        'application/vnd.github.inertia-preview+json')
+    request.add_header('Authorization', 'token '+token)
+
+    try:
+        response = urllib.request.urlopen(request)
+    except Exception as e:
+        print('[-] Could not connect:', e)
+        sys.exit(-1)
+
+    if response.getcode() != 200:
+        print('[-] Returned: %s', response.getcode())
+        sys.exit(-1)
+
+    batch = json.loads(response.read(response.length))
+    projects.extend(batch)
+
+    # TODO: double-check that there are not more repos to fetch
+
+    projects.sort(key=lambda p: p['name'])
+
+    clone(projects, 'full_name', 'ssh_url')
+
+
+def clone(projects, path_key, ssh_key):
+    base = os.getcwd()
+
+    count = 0
+    width = len(str(len(projects)))
+    for project in projects:
+        count += 1
+        project_path = project[path_key]
+        project_dir  = os.path.dirname(project_path)
+        giturl  = project[ssh_key]
+
+        if os.path.exists(project_path):
+            logging.info('[-] Already checked out: %s', project_path)
+            continue
+
+        os.makedirs(project_path, exist_ok=True)
+        logging.info(f'[+] {count:{width}} / {len(projects)} - {giturl}')
+        os.system(f'git clone -q {giturl} {project_path}')
+
+
+if '__main__' == __name__:
+    sys.exit(main())

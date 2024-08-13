@@ -1,0 +1,10 @@
+[aliases]
+mygit = gitlab.local
+other = some.other.gitlab
+
+[tokens]
+gitlab.local      = glpat-xxxxxxxxxxxxxxxxxxxx
+some.other.gitlab = glpat-xxxxxxxxxxxxxxxxxxxx
+
+[github]
+shawcx = ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx

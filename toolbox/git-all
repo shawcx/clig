@@ -1,0 +1,42 @@
+#!/usr/bin/env python3
+
+import sys
+import os
+import argparse
+import shutil
+import subprocess
+
+
+parser = argparse.ArgumentParser(
+    description     = 'Apply a git command to all the repositories under the current directory',
+    formatter_class = argparse.RawDescriptionHelpFormatter,
+    )
+
+parser.add_argument('command', nargs='*', help='git command')
+
+args,remainder = parser.parse_known_args()
+
+git_cmd = ['git']
+git_cmd += args.command if args.command else ['status', '-s']
+if remainder:
+    git_cmd += remainder
+
+base = os.path.abspath('.')
+fmt = '-' * (shutil.get_terminal_size().columns)
+for root,directories,filenames in os.walk(base):
+    directories.sort()
+    filenames.sort()
+    if '.git' not in directories and '.git' not in filenames:
+        continue
+    name = root[len(base)+1:]
+    if name:
+        sys.stdout.write('\x1b[34m')
+        sys.stdout.write(fmt + '\r--- ')
+        sys.stdout.write('\x1b[1;32m')
+        sys.stdout.write(name)
+        sys.stdout.write(' \x1b[0m\n')
+    os.chdir(root)
+
+    process = subprocess.Popen(git_cmd)
+
+    out,err = process.communicate()

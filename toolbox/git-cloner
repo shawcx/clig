@@ -65,30 +65,35 @@ def main():
 
     reverse = {}
     max_alias_len = 0
-    for alias,domain in config['aliases'].items():
-        max_alias_len = max(len(alias), max_alias_len)
-        reverse[domain] = alias
+
+    if 'aliases' in config:
+        for alias,domain in config['aliases'].items():
+            max_alias_len = max(len(alias), max_alias_len)
+            reverse[domain] = alias
 
     # initialize the alias and domain variables
     alias = None
     domain = args.domain
 
     # check if cloned before
-    #if os.path.exists('.git-cloner'):
-    #    with open('.git-cloner', 'r') as fp:
-    #        specified = domain
-    #        alias,domain = [s.strip() for s in fp.readline().split('=')]
-    #        if specified and (specified != alias and specified != domain):
-    #            logging.error('[!] Conflict between %s and %s (%s)', specified, alias, domain)
-    #            return -1
+    if os.path.exists('.git-cloner'):
+        with open('.git-cloner', 'r') as fp:
+            specified = domain
+            alias,domain = [s.strip() for s in fp.readline().split('=')]
+            if specified and (specified != alias and specified != domain):
+                logging.error('[!] Conflict between %s and %s (%s)', specified, alias, domain)
+                return -1
 
     isGitHub = False
-    if domain.startswith('github'):
+    if domain and domain.startswith('github'):
         isGitHub = True
         domain,user = domain.split(':',1)
 
     # if no domain specified check if there is only 1 entry in the config file
     if not domain:
+        if 'tokens' not in config:
+            logging.error('[!] No tokens defined in config file')
+            return -1
         if 1 < len(config['tokens']):
             logging.error('[!] More than one domain defined, please specify:')
             for name in config['tokens']:
@@ -128,15 +133,16 @@ def main():
     # cache the alias and domain for future runs
     if not os.path.exists('.git-cloner'):
         with open('.git-cloner', 'w') as fp:
-            fp.write(f'{alias} = {domain}')
+            if not isGitHub:
+                fp.write(f'{alias} = {domain}')
+            else:
+                fp.write(f'{alias} = {domain}:{user}')
 
     if not isGitHub:
         token = config['tokens'][domain]
-        print('????', args, domain, token)
-        #query_gitlab(args, domain, token)
+        query_gitlab(args, domain, token)
     else:
         token = config['github'][user]
-        print('GH!', user, token)
         query_github(user, token)
     return 0
 
@@ -155,9 +161,7 @@ def query_gitlab(args, domain, token):
 
     projects = []
     while True:
-        #url = baseurl + f'projects?page={page}&membership=true'
         url = baseurl + f'projects?{ urllib.parse.urlencode(params) }'
-        print(url)
 
         request = urllib.request.Request(url)
         request.add_header('Private-Token', token)
@@ -222,6 +226,9 @@ def query_github(user, token):
 
     projects.sort(key=lambda p: p['name'])
 
+    for project in projects:
+        project['full_name'] = project['full_name'].split('/',1)[1]
+
     clone(projects, 'full_name', 'ssh_url')
 
 
@@ -242,8 +249,10 @@ def clone(projects, path_key, ssh_key):
 
         os.makedirs(project_path, exist_ok=True)
         logging.info(f'[+] {count:{width}} / {len(projects)} - {giturl}')
-        os.system(f'git clone -q {giturl} {project_path}')
-
+        status = os.system(f'git clone -q {giturl} {project_path}')
+        # stop iterating on ctrl-c
+        if status == 2:
+            break
 
 if '__main__' == __name__:
     sys.exit(main())
